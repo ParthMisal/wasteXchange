@@ -20,6 +20,7 @@ client.interceptors.response.use(
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('ecosync_token')
       localStorage.removeItem('ecosync_role')
+      localStorage.removeItem('ecosync_active_role')
       localStorage.removeItem('ecosync_user')
       window.location.href = '/login'
     }

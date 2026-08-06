@@ -1,18 +1,18 @@
 # ♻️ wasteXchange (Eco-Sync)
 
-> **A B2B industrial surplus marketplace** that connects waste generators with buyers, turning surplus material into recoverable value through AI-assisted matching.
+> **A B2B industrial surplus marketplace** that connects waste generators with buyers, turning surplus material into recoverable value through AI-assisted matchmaking.
 
 ---
 
 ## 🌐 Overview
 
-wasteXchange is a full-stack web platform built for a hackathon. It enables:
-
-- **Sellers** to list industrial surplus / waste materials with quantity, price, purity, photos, and location.
-- **Buyers** to search, filter, and browse marketplace listings.
-- **AI matching** to score material listings against a buyer's requirement and rank them by match score, distance, or price.
-- **Requests & live chat** so buyers can send requests to sellers and track status (Pending → Accepted → In Transit → Completed).
-- **Route preview** showing seller ↔ buyer distance and duration on a stylised map.
+- **Sellers** list industrial surplus / waste materials with quantity, price, purity, photos, condition, and location.
+- **Buyers** search, filter, save, and request materials from the marketplace.
+- **Dual-role accounts** — the same email can act as buyer AND seller, with a one-click role switcher in the navbar.
+- **AI matchmaking** — every listing is scored on *deal quality* (category fit, quantity fit, price competitiveness, quality signals, seller trust) blended with *distance* (Google Distance Matrix with haversine fallback). Optionally refined by Gemini/OpenAI.
+- **Requests & live chat** — buyers request listings, sellers accept/reject and advance status (Pending → Accepted → In Transit → Completed), with a real-time polling chat.
+- **Google Maps** — live route previews between buyer and seller, Places autocomplete on location inputs, geocoding & distance via the backend (no key required for the map embeds).
+- **Impact tracking** — dashboards show tonnes diverted, CO₂e saved, trees/cars/kWh equivalents.
 
 ---
 
@@ -31,44 +31,35 @@ The two services are decoupled: the frontend talks to the backend exclusively th
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
 | Tool    | Version |
 |---------|---------|
 | Node.js | 18+     |
 | Python  | 3.12+   |
 | Docker  | any     |
 
-### 1. Start the local MongoDB instance
+### 1. Start MongoDB (Docker)
 
 ```bash
 docker compose up -d
 ```
 
-> This spins up a MongoDB 7 container on `127.0.0.1:27017` with a persistent named volume (`mongo-data`).
-
 ### 2. Start the backend
 
 ```bash
 cd backend
+python -m venv .venv
+.venv\Scripts\Activate.ps1        # Windows
+# source .venv/bin/activate       # macOS / Linux
 
-# Create & activate a virtual environment
-python -m venv venv
-# Windows (PowerShell):
-venv\Scripts\Activate.ps1
-# macOS / Linux:
-source venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Configure environment
-copy .env.example .env   # Windows
-# cp .env.example .env   # macOS/Linux
-# Edit .env with your MongoDB URI and JWT secret (see backend section below)
-
-# Run the server
+copy .env.example .env            # then edit JWT_SECRET_KEY etc.
 uvicorn app.main:app --reload
+```
+
+Seed demo data (2 users + 18 materials):
+
+```bash
+python -m app.seed
 ```
 
 Backend available at **http://localhost:8000** — Swagger docs at `/docs`.
@@ -77,12 +68,48 @@ Backend available at **http://localhost:8000** — Swagger docs at `/docs`.
 
 ```bash
 cd frontend
-
 npm install
 npm run dev
 ```
 
 Frontend available at **http://localhost:5173**.
+
+### Demo accounts (after seeding)
+
+| Email | Password | Roles |
+|---|---|---|
+| `seller@ecosync.in` | `password123` | Seller (Mumbai) |
+| `both@ecosync.in` | `password123` | **Buyer + Seller** (Pune) |
+
+---
+
+## ✨ Key Features
+
+### Dual-role accounts
+- Signup offers **Seller**, **Buyer**, or **Buyer & Seller**.
+- Login returns all roles; the navbar shows a **Switch role** dropdown for dual accounts.
+- Buyers can upgrade to seller (and vice versa) anytime via `POST /api/auth/me/roles`.
+
+### AI matchmaking (`GET /api/match`)
+```
+match_score = 0.65 × deal_quality + 0.35 × distance_score
+```
+- **Deal quality** — category similarity, quantity compatibility, price vs. market average, purity/grade signals, seller trust.
+- **Distance** — Google Distance Matrix API when `GOOGLE_MAPS_API_KEY` is set; haversine fallback otherwise.
+- **LLM refinement (optional)** — set `AI_PROVIDER=gemini|openai` and `AI_API_KEY`; the model re-ranks top candidates and adds an AI market insight.
+- The UI exposes the full score breakdown ("Why this score?") per match.
+
+### Google Maps
+- `GET /api/maps/geocode` and `GET /api/maps/distance` proxy the Google APIs (key stays server-side).
+- Real map embeds (no API key) in request details; Places autocomplete when `VITE_GOOGLE_MAPS_API_KEY` is set.
+
+### Dashboards
+- **Seller** — listings CRUD, requests received with statuses, live carbon impact, AI insight.
+- **Buyer** — requests tracking, saved materials, AI recommendations, procurement impact, AI matchmaking form.
+
+### Requests & chat
+- Buyers request listings (duplicate pending requests blocked); sellers accept/reject/advance; material status auto-updates (reserved/sold).
+- Per-request chat with 5s polling.
 
 ---
 
@@ -96,158 +123,98 @@ Frontend available at **http://localhost:5173**.
 |---|---|---|
 | `/` | public | Landing / marketing page |
 | `/login` | public | Sign in |
-| `/signup` | public | Register as seller or buyer |
-| `/dashboard/seller` | auth | Seller dashboard (listings & stats) |
-| `/dashboard/seller/upload` | auth | Create / edit a material listing |
-| `/marketplace` | auth | Browse & filter materials |
-| `/match-results` | auth | AI-ranked matches for a requirement |
-| `/requests/:id` | auth | Request detail, status, contact, live chat |
+| `/signup` | public | Register as seller, buyer, or both |
+| `/dashboard` | auth | Redirects to active role's dashboard |
+| `/dashboard/seller` | auth + seller | Listings, requests, carbon impact |
+| `/dashboard/buyer` | auth + buyer | Requests, saved, AI recs, impact |
+| `/dashboard/seller/upload` | auth + seller | Create / edit a listing (`?edit=<id>`) |
+| `/marketplace` | auth | Browse, filter, save & request materials |
+| `/match-results` | auth + buyer | AI-ranked matches with score breakdown |
+| `/requests/:id` | auth | Status stepper, actions, route map, live chat |
 
-Protected routes redirect unauthenticated users to `/login`.
-
-### Design System
-
-Defined in `tailwind.config.js`:
-
-- **Colors** — `primary` (teal `#134E4A`), `accent` (amber `#D97706`), `surface` (`#FAFAF9`), semantic `success` / `warning` / `danger`.
-- **Fonts** — Manrope (headings) · Inter (body), loaded via Google Fonts.
-- **Utilities** — `.card` and `.fade-in` classes in `src/index.css`.
-
-### Frontend Environment
-
-```env
-# frontend/.env
-VITE_API_URL=http://localhost:8000
-```
-
-### Frontend Structure
-
-```
-frontend/src/
-├── main.jsx               # App bootstrap: BrowserRouter + AuthProvider
-├── App.jsx                # Route definitions + auth guards
-├── index.css              # Tailwind directives + base styles
-├── api/
-│   ├── auth.js            # signup / login
-│   ├── materials.js       # search, matches, my-listings, create/delete
-│   └── requests.js        # request detail + messages
-├── context/
-│   └── AuthContext.jsx    # auth state (token/role/user → localStorage)
-├── components/
-│   ├── MapView.jsx        # stylised route preview
-│   └── ui/                # reusable primitives (Button, Card, Input, Badge…)
-└── pages/
-    ├── Landing.jsx
-    ├── Login.jsx / Signup.jsx
-    ├── SellerDashboard.jsx
-    ├── UploadMaterial.jsx
-    ├── Marketplace.jsx
-    ├── MatchResults.jsx
-    └── RequestDetail.jsx
-```
+Protected routes redirect unauthenticated users to `/login`; role-restricted routes redirect to the right dashboard.
 
 ---
 
 ## ⚙️ Backend
 
-**Stack:** Python 3.12 · FastAPI · Uvicorn · MongoDB Atlas · Motor · Beanie ODM · Pydantic v2 · Passlib (bcrypt) · python-jose (JWT)
-
-### Backend Environment
-
-```env
-# backend/.env
-MONGO_URI=mongodb+srv://<username>:<password>@<cluster>/?retryWrites=true&w=majority
-MONGO_DB_NAME=ecosync
-JWT_SECRET_KEY=<long-random-string>
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=60
-CORS_ORIGINS=http://localhost:5173,http://localhost:3000
-```
-
-Generate a strong secret:
-
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(64))"
-```
-
-> MongoDB Atlas users: create a cluster, DB user, and whitelist your IP under *Network Access*.
-
-### Backend Structure
+**Stack:** Python 3.12 · FastAPI · Uvicorn · Motor · Beanie ODM · Pydantic v2 · Passlib (bcrypt) · python-jose (JWT) · httpx
 
 ```
 backend/app/
-├── main.py                 # FastAPI app, CORS, lifespan, router wiring
+├── main.py                 # FastAPI app, CORS, static uploads, router wiring
+├── seed.py                 # Demo data seeder
 ├── core/
-│   ├── config.py           # Settings from .env (DB, JWT, CORS)
+│   ├── config.py           # Settings from .env (DB, JWT, CORS, Maps, AI, uploads)
 │   ├── database.py         # MongoDB + Beanie async initialisation
 │   └── security.py         # bcrypt hashing + JWT create/decode
-├── models/
-│   └── user.py             # User Beanie document (MongoDB schema)
-├── schemas/
-│   ├── auth.py             # Auth request/response models
-│   └── user.py             # UserSignup / UserLogin / UserResponse / Token
+├── models/                 # User, Material, Request, Message, SavedMaterial
+├── schemas/                # Pydantic request/response models
 ├── services/
-│   └── auth_service.py     # Auth business logic (signup, login)
-├── dependencies/
-│   └── auth.py             # get_current_user dependency
+│   ├── auth_service.py     # signup/login + dual-role management
+│   ├── maps_service.py     # Google Geocoding/Distance Matrix + haversine fallback
+│   ├── matching_service.py # deal-quality + distance scoring engine
+│   ├── ai_service.py       # Gemini/OpenAI refinement + market insight
+│   └── image_service.py    # local image storage
+├── dependencies/auth.py    # get_current_user (JWT bearer)
 └── routers/
-    ├── health.py           # GET / health check
-    └── auth.py             # POST /api/auth/signup, /api/auth/login
+    ├── health.py           # GET /
+    ├── auth.py             # signup, login, me, me/roles
+    ├── materials.py        # CRUD, search, my-listings, summary, save/unsave
+    ├── requests.py         # create, list, status, messages
+    ├── match.py            # GET /api/match (AI matchmaking)
+    ├── maps.py             # geocode + distance endpoints
+    └── dashboard.py        # seller & buyer dashboard aggregates
 ```
 
-### API Reference
+### API surface
 
-#### `GET /` — Health check
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/` | – | Health check (incl. DB ping) |
+| POST | `/api/auth/signup` | – | Register (role or roles) |
+| POST | `/api/auth/login` | – | Login → JWT + roles |
+| GET | `/api/auth/me` | ✓ | Current profile |
+| POST | `/api/auth/me/roles` | ✓ | Add buyer/seller role |
+| GET | `/api/materials/search` | ✓ | Search/filter, distance-aware sort |
+| POST | `/api/materials` | ✓ seller | Create listing (multipart images) |
+| GET/PUT/DELETE | `/api/materials/{id}` | ✓ | Read/update/delete own listing |
+| GET | `/api/materials/my-listings` | ✓ seller | Own listings |
+| GET | `/api/materials/my-listings/summary` | ✓ seller | Dashboard stats |
+| GET | `/api/materials/saved` | ✓ buyer | Saved materials |
+| POST/DELETE | `/api/materials/{id}/save` | ✓ buyer | Save / unsave |
+| POST | `/api/requests` | ✓ buyer | Send request |
+| GET | `/api/requests` | ✓ | List (buyer or seller view) |
+| GET/PATCH | `/api/requests/{id}` , `/status` | ✓ | Detail + status transitions |
+| GET/POST | `/api/requests/{id}/messages` | ✓ | Chat |
+| GET | `/api/match` | ✓ buyer | AI matchmaking |
+| GET | `/api/maps/geocode` | ✓ | Address → coordinates |
+| GET | `/api/maps/distance` | ✓ | Distance + duration |
+| GET | `/api/dashboard/seller` | ✓ seller | Stats, requests, impact, AI insight |
+| GET | `/api/dashboard/buyer` | ✓ buyer | Stats, recs, impact, AI insight |
 
-```json
-{ "status": "Backend Running", "database": "Connected" }
-```
+---
 
-#### `POST /api/auth/signup` — Register a user
+## 🔐 Authentication Flow
 
-Request:
+1. Signup (`POST /api/auth/signup`) — password stored as a bcrypt hash.
+2. Login returns a signed JWT plus the user's `roles` array.
+3. Frontend stores `token`, `role`, `active_role`, `user` in `localStorage`.
+4. Dual accounts can switch active role from the navbar; all API calls send `Authorization: Bearer <token>`.
 
-```json
-{
-  "name": "Ravi Kumar",
-  "company": "Acme Industries",
-  "email": "seller@example.com",
-  "password": "supersecret123",
-  "location": "Mumbai"
-}
-```
+---
 
-Returns `201 { "message": "User created successfully" }`.  
-Errors: `409` duplicate email · `422` validation failure.
+## 🗺️ Google Maps & AI configuration
 
-#### `POST /api/auth/login` — Authenticate
+| Env var | Where | Effect |
+|---|---|---|
+| `GOOGLE_MAPS_API_KEY` | backend/.env | Real geocoding + distance matrix (fallback: haversine + city lookup) |
+| `VITE_GOOGLE_MAPS_API_KEY` | frontend/.env | Places autocomplete in forms |
+| `AI_PROVIDER` | backend/.env | `gemini` / `openai` / `none` |
+| `AI_API_KEY` | backend/.env | LLM key (refines scores + market insights) |
+| `AI_MODEL` | backend/.env | e.g. `gemini-2.0-flash` |
 
-Returns `200`:
-
-```json
-{
-  "access_token": "<jwt>",
-  "token_type": "bearer",
-  "user": {
-    "id": "<user-id>",
-    "full_name": "Ravi Kumar",
-    "company_name": "Acme Industries",
-    "email": "seller@example.com",
-    "role": "seller",
-    "address": "Mumbai",
-    "created_at": "2026-01-01T00:00:00Z"
-  }
-}
-```
-
-Errors: `401` unknown email or incorrect password.
-
-All authenticated endpoints accept `Authorization: Bearer <token>`.
-
-#### Interactive Docs
-
-- **Swagger UI** — http://localhost:8000/docs
-- **ReDoc** — http://localhost:8000/redoc
+All features degrade gracefully — the platform is fully functional without any keys.
 
 ---
 
@@ -255,20 +222,9 @@ All authenticated endpoints accept `Authorization: Bearer <token>`.
 
 | Mode | Connection |
 |------|------------|
-| **Local (Docker)** | `mongodb://wx_admin:passwordLocalServer@127.0.0.1:27017` |
-| **Cloud** | MongoDB Atlas — configure `MONGO_URI` in `backend/.env` |
+| **Local (Docker)** | `mongodb://admin:password@localhost:27017/?authSource=admin` (db `ecosync`) |
 
-The `docker-compose.yml` at the project root starts a MongoDB 7 container with a named persistent volume (`mongo-data`).
-
----
-
-## 🔐 Authentication Flow
-
-1. User signs up (`POST /api/auth/signup`) — password stored as a bcrypt hash, never plain text.
-2. User logs in (`POST /api/auth/login`) — server returns a signed JWT.
-3. Frontend stores `token`, `role`, and `user` in `localStorage` under `ecosync_token`, `ecosync_role`, `ecosync_user`.
-4. Role determines post-auth redirect: **seller** → `/dashboard/seller` · **buyer** → `/marketplace`.
-5. All subsequent API calls send `Authorization: Bearer <token>`.
+Collections: `users`, `materials`, `requests`, `messages`, `saved_materials`.
 
 ---
 
@@ -276,30 +232,13 @@ The `docker-compose.yml` at the project root starts a MongoDB 7 container with a
 
 | Feature | Status |
 |---|---|
-| FastAPI app + Swagger docs | ✅ Done |
-| MongoDB connection (async Motor + Beanie) | ✅ Done |
-| CORS middleware | ✅ Done |
-| User signup & login (JWT) | ✅ Done |
-| Frontend auth (signup / login / route guards) | ✅ Done |
-| Seller dashboard & material listings UI | ✅ Done |
-| Marketplace browse & filter UI | ✅ Done |
-| AI match results UI | ✅ Done |
-| Request detail & live chat UI | ✅ Done |
-| Backend: materials, requests, AI matching endpoints | 🚧 Not yet built |
-
----
-
-## 🛣️ Roadmap
-
-- [ ] Backend: materials CRUD endpoints
-- [ ] Backend: requests & messaging endpoints
-- [ ] Backend: AI matching service
-- [ ] Image upload support (multipart)
-- [ ] WebSocket live chat
-- [ ] Deployment (Docker Compose / cloud)
-
----
-
-## 📄 License
-
-This project was created for a hackathon. All rights reserved.
+| FastAPI + MongoDB (Beanie) + JWT auth | ✅ |
+| Dual-role accounts + role switching | ✅ |
+| Materials CRUD + image uploads | ✅ |
+| Marketplace search/filter/sort + distance | ✅ |
+| AI matchmaking (deal quality + distance + LLM) | ✅ |
+| Requests, status workflow & live chat | ✅ |
+| Saved materials | ✅ |
+| Google Maps (geocode, distance, embeds, Places) | ✅ |
+| Seller & buyer dashboards with impact tracking | ✅ |
+| Seed data + demo accounts | ✅ |

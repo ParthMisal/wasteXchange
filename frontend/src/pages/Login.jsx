@@ -26,10 +26,13 @@ export default function Login() {
     setLoading(true)
     try {
       const res = await authApi.login(form)
-      const role = res.user?.role
+      const roles = res.user?.roles?.length ? res.user.roles : [res.user?.role].filter(Boolean)
+      const role = roles.includes('seller') ? 'seller' : roles[0] || 'buyer'
       login(res.user, res.access_token, role)
-      const from = location.state?.from?.pathname || (role === 'seller' ? '/dashboard/seller' : '/marketplace')
-      navigate(from, { replace: true })
+      const from = location.state?.from?.pathname
+      const defaultPath =
+        role === 'seller' ? '/dashboard/seller' : '/dashboard/buyer'
+      navigate(from || defaultPath, { replace: true })
     } catch (err) {
       setError(
         err.response?.data?.detail ||
@@ -49,7 +52,7 @@ export default function Login() {
           to="/"
           className="mb-8 block text-center font-heading text-2xl font-bold text-primary"
         >
-          Eco-Sync
+          waste<span className="text-accent">Xchange</span>
         </Link>
         <Card>
           <h1 className="font-heading text-2xl font-bold text-ink">Log in</h1>

@@ -4,6 +4,10 @@ from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 from app.core.config import get_settings
+from app.models.material import Material
+from app.models.message import Message
+from app.models.request import Request
+from app.models.saved import SavedMaterial
 from app.models.user import User
 
 settings = get_settings()
@@ -22,7 +26,13 @@ async def init_db() -> None:
 
     await init_beanie(
         database=database,
-        document_models=[User],
+        document_models=[
+            User,
+            Material,
+            Request,
+            Message,
+            SavedMaterial,
+        ],
     )
 
 

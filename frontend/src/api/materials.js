@@ -20,6 +20,11 @@ export async function getMyListingsSummary() {
   return res.data
 }
 
+export async function getMaterial(id) {
+  const res = await api.get(`/api/materials/${id}`)
+  return res.data
+}
+
 export async function createMaterial(data) {
   const isFormData = typeof FormData !== 'undefined' && data instanceof FormData
   const res = await api.post('/api/materials', data, {
@@ -28,8 +33,38 @@ export async function createMaterial(data) {
   return res.data
 }
 
+export async function updateMaterial(id, data) {
+  const res = await api.put(`/api/materials/${id}`, data)
+  return res.data
+}
+
 export async function deleteMaterial(id) {
   const res = await api.delete(`/api/materials/${id}`)
+  return res.data
+}
+
+export async function saveMaterial(id) {
+  const res = await api.post(`/api/materials/${id}/save`)
+  return res.data
+}
+
+export async function unsaveMaterial(id) {
+  const res = await api.delete(`/api/materials/${id}/save`)
+  return res.data
+}
+
+export async function getSavedMaterials() {
+  const res = await api.get('/api/materials/saved')
+  return res.data
+}
+
+export async function geocode(address) {
+  const res = await api.get('/api/maps/geocode', { params: { address } })
+  return res.data
+}
+
+export async function getDistance(params = {}) {
+  const res = await api.get('/api/maps/distance', { params })
   return res.data
 }
 

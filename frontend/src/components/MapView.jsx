@@ -1,26 +1,66 @@
 import React from 'react'
 import { MapPin } from 'lucide-react'
 
-const toLabel = (loc) => {
-  if (!loc) return 'Unknown'
-  if (typeof loc === 'string') return loc
-  if (typeof loc === 'object' && (loc.lat != null || loc.name)) {
-    return loc.name || `${loc.lat != null ? loc.lat : ''},${loc.lng != null ? loc.lng : ''}`
+const toCoords = (loc) => {
+  if (!loc) return null
+  if (typeof loc === 'object' && loc?.latitude != null && loc?.longitude != null) {
+    return [loc.latitude, loc.longitude]
   }
-  return 'Unknown'
+  return null
 }
 
+/**
+ * Route preview. Uses a live Google Maps embed (no API key required) when
+ * coordinates are available; otherwise falls back to the stylised SVG route.
+ */
 export default function MapView({
   sellerLocation,
   buyerLocation,
   distanceKm,
   durationMin,
 }) {
-  const from = toLabel(sellerLocation)
-  const to = toLabel(buyerLocation)
+  const from = toCoords(sellerLocation)
+  const to = toCoords(buyerLocation)
+
+  // If one side is missing, fall back to showing a single place map
+  if (from || to) {
+    const coords = from || to
+    const q = coords ? `${coords[0]},${coords[1]}` : ''
+    const directionUrl = from && to
+      ? `https://www.google.com/maps/dir/?api=1&origin=${from[0]},${from[1]}&destination=${to[0]},${to[1]}`
+      : `https://www.google.com/maps?q=${q}&z=12`
+    return (
+      <div className="relative h-full w-full overflow-hidden rounded-lg border border-stone-200 bg-stone-100">
+        <iframe
+          title="Map preview"
+          src={`${directionUrl}&output=embed`}
+          className="h-full w-full border-0"
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          allowFullScreen
+        />
+        <div className="pointer-events-none absolute left-3 top-3">
+          <div className="rounded-full bg-white px-4 py-2 text-center shadow-sm ring-1 ring-stone-200">
+            {distanceKm != null ? (
+              <p className="text-xs font-semibold text-ink">
+                ≈ {Math.round(distanceKm)} km
+                {durationMin != null ? ` · ${Math.round(durationMin)} min` : ''}
+              </p>
+            ) : (
+              <p className="text-xs font-semibold text-ink">Route</p>
+            )}
+          </div>
+        </div>
+        <div className="pointer-events-none absolute bottom-3 left-3 max-w-[70%] text-[10px] text-ink-muted">
+          <p className="truncate">{typeof sellerLocation === 'string' ? sellerLocation : ''}</p>
+          <p className="truncate">{typeof buyerLocation === 'string' ? buyerLocation : ''}</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="relative overflow-hidden rounded-lg border border-stone-200 bg-[#EDEBDf]">
+    <div className="relative h-full w-full overflow-hidden rounded-lg border border-stone-200 bg-[#EDEBDf]">
       <svg
         className="absolute inset-0 h-full w-full opacity-40"
         preserveAspectRatio="none"
@@ -76,8 +116,8 @@ export default function MapView({
       </div>
 
       <div className="pointer-events-none absolute left-3 top-3 text-[10px] text-ink-muted">
-        <p>{from}</p>
-        <p>{to}</p>
+        <p>{typeof sellerLocation === 'string' ? sellerLocation : 'Seller'}</p>
+        <p>{typeof buyerLocation === 'string' ? buyerLocation : 'Buyer'}</p>
       </div>
     </div>
   )

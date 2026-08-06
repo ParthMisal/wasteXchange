@@ -1,8 +1,10 @@
+from datetime import datetime, timezone
+
 from fastapi import HTTPException, status
 
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import User
-from app.schemas.auth import LoginRequest, SignupRequest, UserResponse
+from app.schemas.auth import SignupRequest, UserResponse
 
 
 def _to_user_response(user: User) -> UserResponse:
@@ -13,8 +15,13 @@ def _to_user_response(user: User) -> UserResponse:
         company_name=user.company_name,
         email=user.email,
         role=user.role,
+        roles=user.active_roles or ["user"],
         phone=user.phone,
         address=user.address,
+        location=user.location,
+        latitude=user.latitude,
+        longitude=user.longitude,
+        verified=user.verified,
         created_at=user.created_at,
     )
 
@@ -30,18 +37,37 @@ async def signup_user(payload: SignupRequest) -> User:
             detail="Email already registered",
         )
 
+    roles = list(payload.roles or ["seller"])
     user = User(
         full_name=payload.full_name,
         company_name=payload.company_name,
         email=email,
         hashed_password=hash_password(payload.password),
-        role=payload.role,
+        role=roles[0],
+        roles=roles,
         phone=payload.phone,
         address=payload.address,
         latitude=payload.latitude,
         longitude=payload.longitude,
     )
     await user.insert()
+    return user
+
+
+async def add_role(user: User, role: str) -> User:
+    """Grant an additional role (buyer/seller) to an existing account."""
+    role = role.lower()
+    if role not in ("buyer", "seller"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid role")
+
+    roles = list(user.active_roles)
+    if role not in roles:
+        roles.append(role)
+        user.roles = roles
+        user.role = roles[0]
+        user.updated_at = datetime.now(timezone.utc)
+        await user.save()
+
     return user
 
 
@@ -57,5 +83,10 @@ async def login_user(email: str, password: str) -> tuple[str, UserResponse]:
             detail="Incorrect email or password",
         )
 
-    token = create_access_token(subject=str(user.id), role=user.role)
+    roles = user.active_roles or ["user"]
+    token = create_access_token(
+        subject=str(user.id),
+        role=user.role or roles[0],
+        roles=roles,
+    )
     return token, _to_user_response(user)

@@ -17,6 +17,7 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+backend/uploads/
 
 # --- Build / logs / coverage ---
 coverage/
@@ -31,3 +32,4 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
+opencode.json

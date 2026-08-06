@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Package, Inbox, Leaf, Pencil, Trash2, Plus } from 'lucide-react'
+import { Package, Inbox, Leaf, Pencil, Trash2, Plus, Sparkles, Eye } from 'lucide-react'
 import Card from '../components/ui/Card.jsx'
 import Badge from '../components/ui/Badge.jsx'
 import Button from '../components/ui/Button.jsx'
+import { getSellerDashboard } from '../api/dashboard.js'
 import { getMyListings, getMyListingsSummary, deleteMaterial } from '../api/materials.js'
 
 const navItems = [
@@ -16,6 +17,9 @@ const statusVariant = (status) => {
   const s = String(status || '').toLowerCase()
   if (s === 'sold') return 'sold'
   if (s === 'reserved') return 'reserved'
+  if (s === 'accepted') return 'accepted'
+  if (s === 'in_transit') return 'warning'
+  if (s === 'pending') return 'pending'
   return 'available'
 }
 
@@ -50,6 +54,9 @@ export default function SellerDashboard() {
     pendingRequests: 0,
     totalTonnes: 0,
   })
+  const [requests, setRequests] = useState([])
+  const [impact, setImpact] = useState(null)
+  const [insight, setInsight] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [deletingId, setDeletingId] = useState(null)
@@ -58,14 +65,18 @@ export default function SellerDashboard() {
     setLoading(true)
     setError('')
     try {
-      const [data, summaryData] = await Promise.all([
+      const [data, summaryData, dashData] = await Promise.all([
         getMyListings(),
         getMyListingsSummary(),
+        getSellerDashboard(),
       ])
       setListings(toListings(data))
       setSummary(toSummary(summaryData))
+      setRequests(dashData.requests || [])
+      setImpact(dashData.impact || null)
+      setInsight(dashData.insight || '')
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to load your listings.')
+      setError(err.response?.data?.message || err.message || 'Failed to load your dashboard.')
     } finally {
       setLoading(false)
     }
@@ -129,6 +140,16 @@ export default function SellerDashboard() {
           </div>
         </div>
         {error && <p className="mt-4 text-sm text-danger">{error}</p>}
+
+        {insight && !loading && (
+          <Card className="mt-6 flex items-center gap-3 border-accent/20 bg-accent-50/60 p-4">
+            <Sparkles className="h-5 w-5 shrink-0 text-accent" />
+            <p className="text-sm text-ink">
+              <span className="font-semibold text-accent-600">AI Insight: </span>
+              {insight}
+            </p>
+          </Card>
+        )}
 
         <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
           {[
@@ -199,13 +220,14 @@ export default function SellerDashboard() {
                             )}
                           </div>
                           <div className="absolute right-2 top-2 flex gap-1.5">
-                            <Link
-                              to={`/dashboard/seller/upload?edit=${m.id}`}
-                              title="Edit"
+                            <button
+                              type="button"
+                              title="View in marketplace"
                               className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-ink-muted shadow-sm transition-colors hover:text-primary"
+                              onClick={() => window.open(`/marketplace?item=${m.id}`, '_blank')}
                             >
-                              <Pencil className="h-4 w-4" />
-                            </Link>
+                              <Eye className="h-4 w-4" />
+                            </button>
                             <button
                               type="button"
                               title="Delete"
@@ -232,10 +254,15 @@ export default function SellerDashboard() {
                             {m.quantity != null ? m.quantity : 0}
                             {m.unit ? ` ${m.unit}` : ''}
                           </span>
-                          {formatDate(m.datePosted || m.createdAt) && (
-                            <span>{formatDate(m.datePosted || m.createdAt)}</span>
-                          )}
+                          <span className="font-heading font-semibold text-accent">
+                            ₹{m.price != null ? m.price : 0} / {m.unit || 'unit'}
+                          </span>
                         </div>
+                        {formatDate(m.datePosted || m.createdAt) && (
+                          <p className="mt-1 text-xs text-ink-faint">
+                            Listed {formatDate(m.datePosted || m.createdAt)}
+                          </p>
+                        )}
                       </Card>
                     )
                   })}
@@ -247,81 +274,108 @@ export default function SellerDashboard() {
           {activeNav === 'requests' && (
             <>
               <h2 className="font-heading text-xl font-bold text-ink">Requests Received</h2>
-              <div className="mt-6 overflow-hidden rounded-xl border border-stone-200 bg-white">
-                <table className="min-w-full divide-y divide-stone-200 text-left text-sm text-ink">
-                  <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wider text-ink-muted">
-                    <tr>
-                      <th className="px-6 py-3.5">Material</th>
-                      <th className="px-6 py-3.5">Buyer</th>
-                      <th className="px-6 py-3.5">Requested Qty</th>
-                      <th className="px-6 py-3.5">Status</th>
-                      <th className="px-6 py-3.5">Date</th>
-                      <th className="px-6 py-3.5">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-200 bg-white">
-                    {[
-                      { id: '1', name: 'Recycled PET flakes', buyer: 'GreenPack Ltd', quantity: 200, unit: 'kg', status: 'pending', date: '2026-08-05' },
-                      { id: '2', name: 'High Grade Copper shavings', buyer: 'Metallo Corp', quantity: 5, unit: 'tonnes', status: 'available', date: '2026-08-04' },
-                    ].map((req) => (
-                      <tr key={req.id} className="hover:bg-stone-50">
-                        <td className="px-6 py-4 font-semibold">{req.name}</td>
-                        <td className="px-6 py-4">{req.buyer}</td>
-                        <td className="px-6 py-4">{req.quantity} {req.unit}</td>
-                        <td className="px-6 py-4">
-                          <Badge variant={statusVariant(req.status)}>{req.status}</Badge>
-                        </td>
-                        <td className="px-6 py-4 text-ink-muted">{req.date}</td>
-                        <td className="px-6 py-4">
-                          <Link to={`/requests/${req.id}`}>
-                            <Button size="sm" variant="secondary">View Detail</Button>
-                          </Link>
-                        </td>
+              {loading ? (
+                <div className="mt-6 h-40 animate-pulse rounded-xl bg-stone-100" />
+              ) : requests.length === 0 ? (
+                <Card className="mt-6 flex flex-col items-center justify-center py-16 text-center">
+                  <Inbox className="h-12 w-12 text-ink-faint" />
+                  <p className="mt-4 font-medium text-ink">No requests yet</p>
+                  <p className="mt-1 text-sm text-ink-muted">
+                    Buyers will see your listings through AI matching.
+                  </p>
+                </Card>
+              ) : (
+                <div className="mt-6 overflow-hidden rounded-xl border border-stone-200 bg-white">
+                  <table className="min-w-full divide-y divide-stone-200 text-left text-sm text-ink">
+                    <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wider text-ink-muted">
+                      <tr>
+                        <th className="px-6 py-3.5">Material</th>
+                        <th className="px-6 py-3.5">Buyer</th>
+                        <th className="px-6 py-3.5">Requested Qty</th>
+                        <th className="px-6 py-3.5">Status</th>
+                        <th className="px-6 py-3.5">Date</th>
+                        <th className="px-6 py-3.5">Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-stone-200 bg-white">
+                      {requests.map((req) => (
+                        <tr key={req.id} className="hover:bg-stone-50">
+                          <td className="px-6 py-4 font-semibold">{req.material_name}</td>
+                          <td className="px-6 py-4">{req.buyer}</td>
+                          <td className="px-6 py-4">
+                            {req.quantity} {req.unit}
+                          </td>
+                          <td className="px-6 py-4">
+                            <Badge variant={statusVariant(req.status)}>{req.status}</Badge>
+                          </td>
+                          <td className="px-6 py-4 text-ink-muted">
+                            {formatDate(req.created_at)}
+                          </td>
+                          <td className="px-6 py-4">
+                            <Link to={`/requests/${req.id}`}>
+                              <Button size="sm" variant="secondary">View Detail</Button>
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </>
           )}
 
           {activeNav === 'carbon' && (
             <>
               <h2 className="font-heading text-xl font-bold text-ink">Carbon Savings Impact</h2>
-              <p className="text-sm text-ink-muted mt-1">Real-time estimation of ecological savings from your exchanges.</p>
+              <p className="mt-1 text-sm text-ink-muted">
+                Real-time estimation of ecological savings from your exchanges.
+              </p>
 
-              <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
-                <Card className="flex flex-col items-center justify-center p-8 text-center bg-teal-900 text-white border-0 shadow-md">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/10 text-emerald-300">
-                    <Leaf className="h-8 w-8" />
-                  </div>
-                  <h3 className="mt-4 font-heading text-2xl font-bold text-white">CO₂ Champions League</h3>
-                  <p className="mt-2 text-sm text-primary-100 max-w-sm">
-                    Your company is currently in the **Top 12%** of industrial surplus recyclers in India. Keep listing to grow your impact!
-                  </p>
-                </Card>
+              {loading ? (
+                <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div className="h-64 animate-pulse rounded-xl bg-stone-100" />
+                  <div className="h-64 animate-pulse rounded-xl bg-stone-100" />
+                </div>
+              ) : (
+                <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <Card className="flex flex-col items-center justify-center bg-teal-900 p-8 text-center text-white shadow-md">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/10 text-emerald-300">
+                      <Leaf className="h-8 w-8" />
+                    </div>
+                    <h3 className="mt-4 font-heading text-2xl font-bold text-white">
+                      {(impact?.co2_reduced_tonnes ?? 0).toLocaleString()} t CO₂e Saved
+                    </h3>
+                    <p className="mt-2 max-w-sm text-sm text-primary-100">
+                      Estimated from {impact?.tonnes_diverted ?? 0} tonnes of surplus diverted
+                      from landfill through your listings.
+                    </p>
+                  </Card>
 
-                <Card className="p-8 shadow-card flex flex-col justify-between">
-                  <div>
-                    <h3 className="font-heading text-lg font-bold text-ink">Equivalencies Index</h3>
-                    <p className="text-sm text-ink-muted mt-1">What your savings translate to in real terms:</p>
-                  </div>
-                  <div className="mt-6 space-y-4">
-                    <div className="flex items-center justify-between text-sm border-b border-stone-100 pb-3">
-                      <span className="text-ink-muted">🌲 Trees planted equivalent</span>
-                      <span className="font-bold text-emerald-600">~ 145 Trees</span>
+                  <Card className="flex flex-col justify-between p-8 shadow-card">
+                    <div>
+                      <h3 className="font-heading text-lg font-bold text-ink">Equivalencies Index</h3>
+                      <p className="mt-1 text-sm text-ink-muted">What your savings translate to in real terms:</p>
                     </div>
-                    <div className="flex items-center justify-between text-sm border-b border-stone-100 pb-3">
-                      <span className="text-ink-muted">🚗 Cars removed from road / year</span>
-                      <span className="font-bold text-emerald-600">~ 8 Cars</span>
+                    <div className="mt-6 space-y-4">
+                      <div className="flex items-center justify-between border-b border-stone-100 pb-3 text-sm">
+                        <span className="text-ink-muted">Trees planted equivalent</span>
+                        <span className="font-bold text-emerald-600">~ {impact?.trees_equivalent ?? 0} Trees</span>
+                      </div>
+                      <div className="flex items-center justify-between border-b border-stone-100 pb-3 text-sm">
+                        <span className="text-ink-muted">Cars removed from road / year</span>
+                        <span className="font-bold text-emerald-600">~ {impact?.cars_off_road ?? 0} Cars</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-ink-muted">Home electricity saved</span>
+                        <span className="font-bold text-emerald-600">
+                          ~ {(impact?.kwh_saved ?? 0).toLocaleString()} kWh
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-ink-muted">⚡ Home electricity saved</span>
-                      <span className="font-bold text-emerald-600">~ 12,400 kWh</span>
-                    </div>
-                  </div>
-                </Card>
-              </div>
+                  </Card>
+                </div>
+              )}
             </>
           )}
         </section>

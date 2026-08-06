@@ -11,6 +11,12 @@ import MatchResults from './pages/MatchResults.jsx'
 import RequestDetail from './pages/RequestDetail.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import Navbar from './components/Navbar.jsx'
+import { useAuth } from './context/AuthContext.jsx'
+
+function RoleRedirect() {
+  const { role } = useAuth()
+  return <Navigate to={role === 'seller' ? '/dashboard/seller' : '/dashboard/buyer'} replace />
+}
 
 function Layout({ children }) {
   return (
@@ -30,7 +36,7 @@ export default function App() {
       <Route
         path="/dashboard/seller"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute role="seller">
             <Layout>
               <SellerDashboard />
             </Layout>
@@ -40,7 +46,7 @@ export default function App() {
       <Route
         path="/dashboard/buyer"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute role="buyer">
             <Layout>
               <BuyerDashboard />
             </Layout>
@@ -50,7 +56,7 @@ export default function App() {
       <Route
         path="/dashboard/seller/upload"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute role="seller">
             <Layout>
               <UploadMaterial />
             </Layout>
@@ -70,7 +76,7 @@ export default function App() {
       <Route
         path="/match-results"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute role="buyer">
             <Layout>
               <MatchResults />
             </Layout>
@@ -83,6 +89,16 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <RequestDetail />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <RoleRedirect />
             </Layout>
           </ProtectedRoute>
         }

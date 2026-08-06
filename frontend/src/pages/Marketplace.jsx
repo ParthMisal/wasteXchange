@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react'
-import { ShieldCheck, Package, Search } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ShieldCheck, Package, Search, Bookmark, BookmarkCheck, Sparkles, Send } from 'lucide-react'
 import Card from '../components/ui/Card.jsx'
 import Badge from '../components/ui/Badge.jsx'
 import Button from '../components/ui/Button.jsx'
 import Input from '../components/ui/Input.jsx'
 import Select from '../components/ui/Select.jsx'
-import { searchMaterials } from '../api/materials.js'
+import { searchMaterials, saveMaterial, unsaveMaterial } from '../api/materials.js'
+import { createRequest } from '../api/requests.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
-const categories = ['All', 'Plastic', 'Metal', 'Chemical', 'Textile', 'Wood', 'E-waste']
+const categories = ['All', 'Plastic', 'Metal', 'Chemical', 'Textile', 'Wood', 'E-waste', 'Paper', 'Glass', 'Rubber']
 
 const sortOptions = {
   newest: 'Newest',
@@ -20,7 +23,16 @@ const normalize = (data) => {
   return data?.materials || data?.listings || []
 }
 
+const statusVariant = (status) => {
+  const s = String(status || '').toLowerCase()
+  if (s === 'sold') return 'sold'
+  if (s === 'reserved') return 'reserved'
+  return 'available'
+}
+
 export default function Marketplace() {
+  const navigate = useNavigate()
+  const { canBuy } = useAuth()
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [category, setCategory] = useState('All')
@@ -34,6 +46,10 @@ export default function Marketplace() {
   const [materials, setMaterials] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [feedback, setFeedback] = useState('')
+  const [savedIds, setSavedIds] = useState({})
+  const [savingId, setSavingId] = useState(null)
+  const [requestingId, setRequestingId] = useState(null)
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query), 400)
@@ -77,9 +93,71 @@ export default function Marketplace() {
   const firstImage = (m) =>
     m?.imageUrl || m?.image || (Array.isArray(m?.images) && m.images.length ? m.images[0] : null)
 
+  const showFeedback = (msg) => {
+    setFeedback(msg)
+    setTimeout(() => setFeedback(''), 3500)
+  }
+
+  const handleSave = async (m) => {
+    setSavingId(m.id)
+    try {
+      if (savedIds[m.id]) {
+        await unsaveMaterial(m.id)
+        setSavedIds((prev) => ({ ...prev, [m.id]: false }))
+        showFeedback('Removed from saved materials.')
+      } else {
+        await saveMaterial(m.id)
+        setSavedIds((prev) => ({ ...prev, [m.id]: true }))
+        showFeedback('Saved to your materials list.')
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Action failed.')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  const handleRequest = async (m) => {
+    if (!canBuy) {
+      showFeedback('Switch to Buyer view to send requests.')
+      return
+    }
+    setRequestingId(m.id)
+    setError('')
+    try {
+      const req = await createRequest({
+        material_id: m.id,
+        quantity: m.quantity,
+      })
+      showFeedback(`Request sent to ${req.material?.material_name || 'seller'}. Track it in your dashboard.`)
+      navigate(`/requests/${req.id}`)
+    } catch (err) {
+      setError(err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to send request.')
+    } finally {
+      setRequestingId(null)
+    }
+  }
+
+  const handleAiMatch = () => {
+    const params = new URLSearchParams()
+    if (category !== 'All') params.set('category', category)
+    if (debouncedQuery) params.set('query', debouncedQuery)
+    navigate(`/match-results?${params.toString()}`)
+  }
+
   return (
     <div className="min-h-screen bg-surface px-6 py-8">
-      <h1 className="font-heading text-2xl font-bold text-ink">Marketplace</h1>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="font-heading text-2xl font-bold text-ink">Marketplace</h1>
+        <button
+          type="button"
+          onClick={handleAiMatch}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent-50 px-4 py-2 text-sm font-semibold text-accent-600 transition-colors hover:bg-accent-100"
+        >
+          <Sparkles className="h-4 w-4" />
+          AI Match This Search
+        </button>
+      </div>
 
       <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-center">
         <div className="relative w-full md:max-w-md">
@@ -121,6 +199,12 @@ export default function Marketplace() {
           )
         })}
       </div>
+
+      {feedback && (
+        <div className="mt-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          {feedback}
+        </div>
+      )}
 
       <div className="mt-8 flex gap-8">
         <aside className="hidden w-64 shrink-0 md:block">
@@ -207,6 +291,7 @@ export default function Marketplace() {
               {materials.map((m) => {
                 const image = firstImage(m)
                 const quantity = `${m.quantity ?? 0} ${m.unit || ''}`.trim()
+                const isSaved = Boolean(savedIds[m.id])
                 return (
                   <Card key={m.id} className="flex flex-col p-4 shadow-card">
                     <div className="relative">
@@ -218,16 +303,27 @@ export default function Marketplace() {
                         )}
                       </div>
                       <div className="absolute left-2 top-2">
-                        <Badge variant="neutral">{m.category || 'Other'}</Badge>
+                        <Badge variant={statusVariant(m.status)}>{m.status}</Badge>
                       </div>
-                      {m.verified && (
-                        <div className="absolute right-2 top-2">
+                      <div className="absolute right-2 top-2 flex gap-1.5">
+                        {m.verified && (
                           <Badge variant="verified">
                             <ShieldCheck className="mr-1 h-3.5 w-3.5" />
                             Verified
                           </Badge>
-                        </div>
-                      )}
+                        )}
+                        <button
+                          type="button"
+                          title={isSaved ? 'Remove from saved' : 'Save material'}
+                          disabled={savingId === m.id}
+                          onClick={() => handleSave(m)}
+                          className={`flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm transition-colors disabled:opacity-50 ${
+                            isSaved ? 'text-primary' : 'text-ink-muted hover:text-primary'
+                          }`}
+                        >
+                          {isSaved ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
+                        </button>
+                      </div>
                     </div>
 
                     <h3 className="mt-3 truncate font-heading font-semibold text-ink">
@@ -241,16 +337,28 @@ export default function Marketplace() {
                     </p>
 
                     <p className="mt-1 text-xs text-ink-faint">
-                      {m.distanceKm != null ? `${Math.round(m.distanceKm)} km away` : 'Distance available'}
+                      {m.distance_km != null
+                        ? `${Math.round(m.distance_km)} km away`
+                        : 'Distance available'}
                     </p>
 
                     <div className="mt-auto flex gap-3 pt-4">
-                      <Button variant="secondary" size="sm" className="flex-1">
-                        View Details
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => handleRequest(m)}
+                        disabled={requestingId === m.id || m.status !== 'available'}
+                      >
+                        <Send className="mr-1.5 h-3.5 w-3.5" />
+                        {requestingId === m.id ? 'Sending…' : 'Request'}
                       </Button>
-                      <Button size="sm" className="flex-1">
-                        Request
-                      </Button>
+                      <Link to={`/match-results?category=${encodeURIComponent(m.category || '')}`} className="flex-1">
+                        <Button size="sm" className="w-full">
+                          <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                          Match
+                        </Button>
+                      </Link>
                     </div>
                   </Card>
                 )
