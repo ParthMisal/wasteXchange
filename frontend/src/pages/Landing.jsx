@@ -179,7 +179,7 @@ export default function Landing() {
               <Button size="lg" className="btn-glow w-full sm:w-auto">I&apos;m a Seller</Button>
             </Link>
             <Link to="/signup">
-              <Button variant="secondary" size="lg" className="w-full border-white/20 text-white hover:bg-white/10 sm:w-auto">
+              <Button size="lg" className="btn-glow w-full sm:w-auto">
                 I&apos;m a Buyer
               </Button>
             </Link>

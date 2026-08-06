@@ -4,6 +4,7 @@ import Landing from './pages/Landing.jsx'
 import Login from './pages/Login.jsx'
 import Signup from './pages/Signup.jsx'
 import SellerDashboard from './pages/SellerDashboard.jsx'
+import BuyerDashboard from './pages/BuyerDashboard.jsx'
 import UploadMaterial from './pages/UploadMaterial.jsx'
 import Marketplace from './pages/Marketplace.jsx'
 import MatchResults from './pages/MatchResults.jsx'
@@ -32,6 +33,16 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <SellerDashboard />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/buyer"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <BuyerDashboard />
             </Layout>
           </ProtectedRoute>
         }
