@@ -27,6 +27,7 @@ export default function MatchScoreBadge({
   showLabel = true,
   className = '',
 }) {
+  const uniqueId = React.useId().replace(/:/g, '')
   const clamped = Math.min(100, Math.max(0, Number(score) || 0))
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
@@ -42,7 +43,7 @@ export default function MatchScoreBadge({
     >
       <svg width={size} height={size} className="-rotate-90">
         <defs>
-          <linearGradient id={`msb-${clamped}`} x1="0" y1="0" x2="1" y2="1">
+          <linearGradient id={`msb-${uniqueId}`} x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stopColor={AMBER} />
             <stop offset="100%" stopColor={TEAL} />
           </linearGradient>
@@ -61,7 +62,7 @@ export default function MatchScoreBadge({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke={`url(#msb-${clamped})`}
+          stroke={`url(#msb-${uniqueId})`}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeDasharray={`${dash} ${circumference}`}

@@ -28,7 +28,8 @@ export default function Login() {
       const res = await authApi.login(form)
       const role = res.user?.role
       login(res.user, res.access_token, role)
-      navigate(role === 'seller' ? '/dashboard/seller' : '/marketplace')
+      const from = location.state?.from?.pathname || (role === 'seller' ? '/dashboard/seller' : '/marketplace')
+      navigate(from, { replace: true })
     } catch (err) {
       setError(
         err.response?.data?.detail ||

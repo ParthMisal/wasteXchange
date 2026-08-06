@@ -8,22 +8,19 @@ import UploadMaterial from './pages/UploadMaterial.jsx'
 import Marketplace from './pages/Marketplace.jsx'
 import MatchResults from './pages/MatchResults.jsx'
 import RequestDetail from './pages/RequestDetail.jsx'
-import { useAuth } from './context/AuthContext.jsx'
+import ProtectedRoute from './components/ProtectedRoute.jsx'
+import Navbar from './components/Navbar.jsx'
 
-function Placeholder({ title }) {
+function Layout({ children }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface">
-      <div className="text-center">
-        <h1 className="font-heading text-2xl font-bold text-ink">{title}</h1>
-        <p className="mt-2 text-sm text-ink-muted">This page is under construction.</p>
-      </div>
+    <div className="flex min-h-screen flex-col bg-surface">
+      <Navbar />
+      <main className="flex-1">{children}</main>
     </div>
   )
 }
 
 export default function App() {
-  const { isAuthenticated } = useAuth()
-
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
@@ -32,31 +29,51 @@ export default function App() {
       <Route
         path="/dashboard/seller"
         element={
-          isAuthenticated ? <SellerDashboard /> : <Navigate to="/login" replace />
+          <ProtectedRoute>
+            <Layout>
+              <SellerDashboard />
+            </Layout>
+          </ProtectedRoute>
         }
       />
       <Route
         path="/dashboard/seller/upload"
         element={
-          isAuthenticated ? <UploadMaterial /> : <Navigate to="/login" replace />
+          <ProtectedRoute>
+            <Layout>
+              <UploadMaterial />
+            </Layout>
+          </ProtectedRoute>
         }
       />
       <Route
         path="/marketplace"
         element={
-          isAuthenticated ? <Marketplace /> : <Navigate to="/login" replace />
+          <ProtectedRoute>
+            <Layout>
+              <Marketplace />
+            </Layout>
+          </ProtectedRoute>
         }
       />
       <Route
         path="/match-results"
         element={
-          isAuthenticated ? <MatchResults /> : <Navigate to="/login" replace />
+          <ProtectedRoute>
+            <Layout>
+              <MatchResults />
+            </Layout>
+          </ProtectedRoute>
         }
       />
       <Route
         path="/requests/:id"
         element={
-          isAuthenticated ? <RequestDetail /> : <Navigate to="/login" replace />
+          <ProtectedRoute>
+            <Layout>
+              <RequestDetail />
+            </Layout>
+          </ProtectedRoute>
         }
       />
       <Route path="*" element={<Navigate to="/" replace />} />
